@@ -77,6 +77,7 @@ code unsigned char	txt_HELP[4]="HELP";         // Continue (reprise apr�s paus
 code unsigned char	txt_XO[2]="XO";			// Commande XO, envoie XOFF 
 code unsigned char	txt_XN[2]="XN";			// Commande XN, envoie XON 
 code unsigned char	txt_CL[2]="CL";			// Commande CL, retourne l'état du capteur de ligne 
+code unsigned char	txt_WR[2]="WR";
 
 unsigned char ligne; //Variable pour le suivi de ligne
 
@@ -369,7 +370,7 @@ void Lecture_RS232_UART0()
 			else if (!(strncmp(commande_string,txt_CL,2))) 	// The CL command is recognized
 			{ 
             ligne = Lire_Ligne(CAPT_LIGNE_ADDRESS); // fix: lag de la valeur de 1 lecture
-            Delai_ms(50);
+            Delai_ms(10);
             
 				ligne = Lire_Ligne(CAPT_LIGNE_ADDRESS);
             if(ligne < 16)
@@ -384,7 +385,12 @@ void Lecture_RS232_UART0()
             
 				Send_string("\n\r",PC_BLUETOOTH); // Pour sauter la ligne 
 			}
-			
+			else if (!(strncmp(commande_string,txt_WR,2))) 	// The XON command is recognized
+			{
+				Delai_ms(1);
+				while (Roule);
+				Send_string("\n\rDONE",PC_BLUETOOTH); // Pour sauter la ligne 
+			}
 // On a d�cod� toutes les commandes qui pilotent la carte Strat�gie, si pas trouv�, alors envoie la contenu de string_commande � la carte moteur  
 			else
 			{

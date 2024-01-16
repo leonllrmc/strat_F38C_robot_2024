@@ -400,7 +400,7 @@ void main (void)
 
 	 while(1)
 	 {
-
+      /*
        
          // Send_string("AV10\r",CARTE_MOTEUR);
          // while (Roule);
@@ -466,7 +466,7 @@ void main (void)
             Send_string(commandBuffer, CARTE_MOTEUR);
 
             memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
-         }
+         }*/
 
 
 
