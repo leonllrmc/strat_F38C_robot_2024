@@ -1,0 +1,14 @@
+Fichier stratégie	
+
+Bug : 
+Changer INIT_F38C.C :  Port_IO_Init() à modifier
+Les sortie TX des ports de sortie sont passés de "open Drain" en "Push-pull"
+
+Bug : 
+RS232.C : Lignes 186-187
+Enlever les lignes qui ajoute un \0 (caractère null) après l'envoi d'une commande... c'est un caractère de trop !
+Diminution des délais après l'envoi de commandes RS232 (de 100ms à 20ms)
+
+Ajout lib SMBUS pour suiveur ligne
+Passage en 48MHz
+Suppression de la gestion des servos par timer

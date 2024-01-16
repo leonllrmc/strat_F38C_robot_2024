@@ -1,0 +1,13 @@
+# CFPT
+/Objects
+/Listings
+/*.uvopt
+/*.uvgui.*
+
+/*.iex
+/*.build_log.htm
+/*.lst
+/*.m51
+/*.hex
+/*.lnp
+
