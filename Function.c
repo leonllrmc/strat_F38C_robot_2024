@@ -78,8 +78,13 @@ code unsigned char	txt_XO[2]="XO";			// Commande XO, envoie XOFF
 code unsigned char	txt_XN[2]="XN";			// Commande XN, envoie XON 
 code unsigned char	txt_CL[2]="CL";			// Commande CL, retourne l'état du capteur de ligne 
 code unsigned char	txt_WR[2]="WR";
+code unsigned char	txt_LF[2]="LF";	// starts line followe, stop automaticay when detects blkack line
+code unsigned char	txt_LFS[3]="LFS"; // stop line Follower
+code unsigned char	txt_LFG[3]="LFG"; // get the flagLineFollower
 
 unsigned char ligne; //Variable pour le suivi de ligne
+
+bit flagLineFollower;
 
 //unsigned int tension_batterie;
 
@@ -370,7 +375,7 @@ void Lecture_RS232_UART0()
 			else if (!(strncmp(commande_string,txt_CL,2))) 	// The CL command is recognized
 			{ 
             ligne = Lire_Ligne(CAPT_LIGNE_ADDRESS); // fix: lag de la valeur de 1 lecture
-            Delai_ms(10);
+            Delai_ms(2);
             
 				ligne = Lire_Ligne(CAPT_LIGNE_ADDRESS);
             if(ligne < 16)
@@ -392,13 +397,23 @@ void Lecture_RS232_UART0()
 				Send_string("\n\rDONE",PC_BLUETOOTH); // Pour sauter la ligne 
 			}
 // On a d�cod� toutes les commandes qui pilotent la carte Strat�gie, si pas trouv�, alors envoie la contenu de string_commande � la carte moteur  
+			else if (!(strncmp(commande_string,txt_LF,2))) 	// Starting line follower
+			{
+				flagLineFollower = 1;
+            
+            Send_string("PW200\r", CARTE_MOTEUR);
+			}
+			else if (!(strncmp(commande_string,txt_LFS,3))) 	// stopping line follower
+			{
+				flagLineFollower = 0;
+			}
 			else
 			{
 				Send_string(commande_string, CARTE_MOTEUR);					// Take the value
             
             // Robot already send NC +  ^J
              
-            //Delai_ms(50); // wait to be sure the flag is set
+            //Delai_ms(5); // wait to be sure the flag is set
             // while(Roule);
             // Send_string("OK\n\r",PC_BLUETOOTH); // Pour indiquer à l'esp32 stratégie qu'on a fini !
 			}
@@ -588,4 +603,14 @@ char* itoa(int val, int base)
 
     return &buf[i+1];
 
+}
+
+bit getLineFollowerFlag()
+{
+	return flagLineFollower;
+}
+
+void setLineFollowerFlag(bit newValue)
+{
+	flagLineFollower = newValue;
 }

@@ -86,7 +86,9 @@
 
 
 
+extern bit getLineFollowerFlag();
 
+extern void setLineFollowerFlag(bit newValue);
 
 /***********/
 /* p0 port */
@@ -161,6 +163,7 @@ extern char* itoa(int val, int base);
 // --------------------------------------------------------------------
 
 unsigned char	dummy1;					// Variable � usage g�n�ral
+
 
 
 // UART0 commande via le bluetooth ou le cable USB
@@ -238,6 +241,7 @@ extern void        Code_Rouge(); //G�re le PCA9685 et le capteur de ligne pour
 extern void        Code_Vert();  //G�re le PCA9685 et le capteur de ligne pour envoi de la couleur
 extern void        Code_Bleu();  //G�re le PCA9685 et le capteur de ligne pour envoi de la couleur
 
+
 extern char* itoa(int val, int base);
 // --------------------------------------------------------------------
 // Variables globales 
@@ -293,4 +297,5 @@ extern unsigned char msk;
 
 /* countdown */
 extern unsigned int countdown;
+
 #endif

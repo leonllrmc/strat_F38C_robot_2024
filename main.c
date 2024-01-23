@@ -114,7 +114,11 @@ char commandBuffer[10] = {0};
 
 ////// FIN ---- Communication smbus -----------------------------------------------
 
+#define min(a,b) (((a)<(b))?(a):(b))
+#define max(a,b) (((a)>(b))?(a):(b))
 
+#define RECOVER_LEFT 1
+#define RECOVER_RIGHT 0
 
 
 
@@ -128,16 +132,18 @@ unsigned char lineRight;
 
 unsigned char angleCorrection;
 
+unsigned char coeffBit0;
 unsigned char coeffBit1;
 unsigned char coeffBit2;
 unsigned char coeffBit3;
 
-const unsigned char baseSpeed = 20;
+const unsigned char baseSpeed = 52;
 
-const unsigned char COEFF_0 = 0;
-const unsigned char COEFF_1 = 2;
-const unsigned char COEFF_2 = 6;
-const unsigned char COEFF_3 = 12;
+const unsigned char COEFF_0 = 5;
+const unsigned char COEFF_1 = 22;
+const unsigned char COEFF_2 = 35;
+const unsigned char COEFF_3 = 46;
+const unsigned char COEFF_RECOVERY = 48;
 
 
 
@@ -165,6 +171,8 @@ unsigned char reverseBits(unsigned char num) {
 //-----------------------------------------------------------------------------
 void main (void)
 {
+  bit lastDirection;
+
   bit Flag_aff_txt0 = 1;
   bit Flag_aff_txt1 = 1;
   unsigned char ligne ; //Variable pour le suivi de ligne
@@ -238,9 +246,10 @@ void main (void)
  
    Putc_uart (XON,CARTE_MOTEUR);	
 
-    
+
+   setLineFollowerFlag(1);
    
-   while (Tirette) // Tant que pas de Tirette pr�sente  
+   while (0) // Tant que pas de Tirette pr�sente  (was while(Tirette))
    {
       if(Flag_aff_txt0) //Affiche le texte suivant 1 seule fois
       {
@@ -285,7 +294,7 @@ void main (void)
    
    } // Fin du test des boutons poussoirs et des leds (Mise en place de la Tirette)
    
-	while (!Tirette)
+	while (1) // was !Tirette
 	{
       if(Flag_aff_txt1) //Affiche le texte suivant 1 seule fois
 		{
@@ -297,8 +306,223 @@ void main (void)
 			Flag_aff_txt1 = 0; //Evite la r�p�tition du texte pr�c�dent
 		}			
       
-			Lectures_COMM();		// Va lire les port de communications (carte moteur et PC-Bluetooth
+      Lectures_COMM();		// Va lire les port de communications (carte moteur et PC-Bluetooth
       
+      Led_jaune = getLineFollowerFlag();
+
+      setLineFollowerFlag(Tirette);
+
+      if(getLineFollowerFlag())
+      {
+         ligne = Lire_Ligne(CAPT_LIGNE_ADDRESS);
+
+         lineLeft = (ligne & 0xF0) >> 4;
+         lineRight = reverseBits((ligne & 0x0F));
+
+         if(lastDirection == RECOVER_LEFT)
+         {
+            coeffBit2 = (lineRight & 0x04) >> 2;
+
+            if(coeffBit2)
+            {
+               // touched side of circuit, recover imediatly to other direction
+
+               Led_verte = 1;
+               Led_rouge = 0;
+
+               strcpy(commandBuffer, "PD");
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue droite au maximum
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+               strcpy(commandBuffer, "PG");
+               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+               // lastDirection = RECOVER_RIGHT;
+
+               continue;
+            }
+         }
+
+         if(lastDirection == RECOVER_RIGHT)
+            {
+            coeffBit2 = (lineLeft & 0x04) >> 2;
+
+            if(coeffBit2)
+            {
+               // touched side of circuit, recover imediatly to other direction
+
+               Led_verte = 0;
+               Led_rouge = 1;
+
+               strcpy(commandBuffer, "PG");
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue droite au maximum
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+               strcpy(commandBuffer, "PD");
+               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+               // lastDirection = RECOVER_LEFT;
+
+               continue;
+            }
+         }
+
+
+         /*if((ligne & 0x3C) == 0x3C)
+         {
+            // arrived at the end
+            setLineFollowerFlag(0);
+         }*/
+
+         if(lineLeft > lineRight) // select only the most used line
+         {
+            Led_verte = 0;
+            Led_rouge = 1;
+
+            coeffBit0 = (lineLeft & 0x01);
+            coeffBit1 = (lineLeft & 0x02) >> 1;
+            coeffBit2 = (lineLeft & 0x04) >> 2;
+            coeffBit3 = (lineLeft & 0x08) >> 3;
+
+            angleCorrection = (coeffBit0 * COEFF_0) + (coeffBit1 * COEFF_1) + (coeffBit2 * COEFF_2) + (coeffBit3 * COEFF_3);
+
+
+            strcpy(commandBuffer, "PG");
+            strcat(commandBuffer, itoa(min(baseSpeed + angleCorrection, 92)*10, 10)); // roue gauche au maximum
+            strcat(commandBuffer, "\r");
+            
+            Send_string(commandBuffer, CARTE_MOTEUR);
+
+            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+            strcpy(commandBuffer, "PD");
+            strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*10, 10)); // roue droite ralentie
+            strcat(commandBuffer, "\r");
+            
+            Send_string(commandBuffer, CARTE_MOTEUR);
+
+            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+            lastDirection = RECOVER_LEFT;
+
+         }
+         else if (lineLeft < lineRight)
+         {
+            Led_verte = 1;
+            Led_rouge = 0;
+
+            coeffBit0 = (lineLeft & 0x01);
+            coeffBit1 = (lineRight & 0x02) >> 1;
+            coeffBit2 = (lineRight & 0x04) >> 2;
+            coeffBit3 = (lineRight & 0x08) >> 3;
+
+            angleCorrection = (coeffBit0 * COEFF_0) + (coeffBit1 * COEFF_1) + (coeffBit2 * COEFF_2) + (coeffBit3 * COEFF_3);
+
+            strcpy(commandBuffer, "PD");
+            strcat(commandBuffer, itoa(min(baseSpeed + angleCorrection, 92)*10, 10)); // roue droite au maximum
+            strcat(commandBuffer, "\r");
+            
+            Send_string(commandBuffer, CARTE_MOTEUR);
+
+            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+            strcpy(commandBuffer, "PG");
+            strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*10, 10)); // roue gauche ralentie
+            strcat(commandBuffer, "\r");
+            
+            Send_string(commandBuffer, CARTE_MOTEUR);
+
+            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+            lastDirection = RECOVER_RIGHT;
+         }
+         else if(ligne == 0x00)
+         {
+            if(lastDirection == RECOVER_LEFT)
+            {
+               Led_verte = 0;
+               Led_rouge = 1;
+
+               strcpy(commandBuffer, "PG");
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue gauche au maximum
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+               strcpy(commandBuffer, "PD");
+               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue droite ralentie
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+            }
+            else
+            {
+               Led_verte = 1;
+               Led_rouge = 0;
+
+               strcpy(commandBuffer, "PD");
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue droite au maximum
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+               strcpy(commandBuffer, "PG");
+               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
+               strcat(commandBuffer, "\r");
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+            }
+         }
+         else if(lineLeft == lineRight)
+         {
+            Led_verte = 1;
+            Led_rouge = 1;
+
+            strcpy(commandBuffer, "PD");
+            strcat(commandBuffer, itoa(baseSpeed*10, 10)); // roue droite au maximum
+            strcat(commandBuffer, "\r");
+            
+            Send_string(commandBuffer, CARTE_MOTEUR);
+
+            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+            strcpy(commandBuffer, "PG");
+            strcat(commandBuffer, itoa(baseSpeed*10, 10)); // roue gauche ralentie
+            strcat(commandBuffer, "\r");
+            
+            Send_string(commandBuffer, CARTE_MOTEUR);
+
+            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+         }
+      }
+
+      Delai_ms(1);
 	}// Attente retrait de la tirette 
    
 
@@ -387,13 +611,6 @@ void main (void)
 
 
   //    Send_string("VI50\r",CARTE_MOTEUR); //vitesse 50%
-            strcpy(commandBuffer, "PW");
-            strcat(commandBuffer, itoa(baseSpeed, 10)); // roue gauche au maximum
-            strcat(commandBuffer, "\r");
-            
-            Send_string(commandBuffer, CARTE_MOTEUR);
-
-            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
    //   StartCountDown(); // Lancement du d�compte, dans 60s max le robot s'arr�tera
 
@@ -485,7 +702,7 @@ void main (void)
 
           
       
-         Delai_ms(10); //Temps de boucle
+         Delai_ms(1); //Temps de boucle
      
     }//Fin du While(1) 
 
