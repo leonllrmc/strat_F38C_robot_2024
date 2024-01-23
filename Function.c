@@ -399,13 +399,23 @@ void Lecture_RS232_UART0()
 // On a d�cod� toutes les commandes qui pilotent la carte Strat�gie, si pas trouv�, alors envoie la contenu de string_commande � la carte moteur  
 			else if (!(strncmp(commande_string,txt_LF,2))) 	// Starting line follower
 			{
-				flagLineFollower = 1;
-            
-            Send_string("PW200\r", CARTE_MOTEUR);
+				setLineFollowerFlag(1);
+            Send_string("ST\r", CARTE_MOTEUR);
 			}
 			else if (!(strncmp(commande_string,txt_LFS,3))) 	// stopping line follower
 			{
-				flagLineFollower = 0;
+				Send_string("Pw000\r", CARTE_MOTEUR);
+				Send_string("PG000\r", CARTE_MOTEUR);
+            Send_string("PD000\r", CARTE_MOTEUR);
+
+            Send_string("ST\r", CARTE_MOTEUR);
+
+				Send_string("RE2\r", CARTE_MOTEUR);
+				while(Roule);
+				Send_string("AV15\r", CARTE_MOTEUR);
+				while(Roule);
+
+				setLineFollowerFlag(0);
 			}
 			else
 			{

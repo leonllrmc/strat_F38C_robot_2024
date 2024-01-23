@@ -247,9 +247,10 @@ void main (void)
    Putc_uart (XON,CARTE_MOTEUR);	
 
 
-   setLineFollowerFlag(1);
+   setLineFollowerFlag(0);
+   Led_jaune=1;
    
-   while (0) // Tant que pas de Tirette pr�sente  (was while(Tirette))
+   /*while (!Tirette) // Tant que pas de Tirette pr�sente  (was while(Tirette))
    {
       if(Flag_aff_txt0) //Affiche le texte suivant 1 seule fois
       {
@@ -293,7 +294,8 @@ void main (void)
       
    
    } // Fin du test des boutons poussoirs et des leds (Mise en place de la Tirette)
-   
+   */
+
 	while (1) // was !Tirette
 	{
       if(Flag_aff_txt1) //Affiche le texte suivant 1 seule fois
@@ -306,11 +308,43 @@ void main (void)
 			Flag_aff_txt1 = 0; //Evite la r�p�tition du texte pr�c�dent
 		}			
       
+         if(!Bp1)
+         {
+            Send_string("RE2\r", CARTE_MOTEUR);
+
+            setLineFollowerFlag(0);
+
+            Led_jaune = getLineFollowerFlag();
+
+            continue;
+         }
+
+         if(!Bp2)
+         {
+            setLineFollowerFlag(1);
+
+            Led_jaune = getLineFollowerFlag();
+
+            continue;
+         }
+
+         if(!Bp3)
+         {
+            Send_string("DI0\r", CARTE_MOTEUR);
+            Delai_ms(500);
+            Send_string("ST\r", CARTE_MOTEUR);
+            Send_string("BR\r", CARTE_MOTEUR);
+
+            setLineFollowerFlag(0);
+
+            Led_jaune = getLineFollowerFlag();
+
+            continue;
+         }
+
       Lectures_COMM();		// Va lire les port de communications (carte moteur et PC-Bluetooth
       
       Led_jaune = getLineFollowerFlag();
-
-      setLineFollowerFlag(Tirette);
 
       if(getLineFollowerFlag())
       {
@@ -318,6 +352,21 @@ void main (void)
 
          lineLeft = (ligne & 0xF0) >> 4;
          lineRight = reverseBits((ligne & 0x0F));
+
+         if((ligne & 0x3C) == 0x3C || (ligne & 0x38) == 0x38 || (ligne & 0x1C) == 0x1C)
+         {
+            Send_string("RE2\r", CARTE_MOTEUR);
+            while(Roule);
+            Send_string("AV20\r", CARTE_MOTEUR);
+            while(Roule);
+
+            setLineFollowerFlag(0);
+
+            Led_jaune = getLineFollowerFlag();
+            continue;
+         }
+
+      
 
          if(lastDirection == RECOVER_LEFT)
          {
@@ -520,9 +569,10 @@ void main (void)
 
             memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
          }
+  
+         Delai_ms(1);
       }
 
-      Delai_ms(1);
 	}// Attente retrait de la tirette 
    
 
