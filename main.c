@@ -137,13 +137,13 @@ unsigned char coeffBit1;
 unsigned char coeffBit2;
 unsigned char coeffBit3;
 
-const unsigned char baseSpeed = 52;
+const unsigned char baseSpeed = 85;
 
-const unsigned char COEFF_0 = 5;
-const unsigned char COEFF_1 = 22;
-const unsigned char COEFF_2 = 35;
-const unsigned char COEFF_3 = 46;
-const unsigned char COEFF_RECOVERY = 48;
+const unsigned char COEFF_0 = 8;
+const unsigned char COEFF_1 = 45;
+const unsigned char COEFF_2 = 60;
+const unsigned char COEFF_3 = 88;
+const unsigned char COEFF_RECOVERY = 90;
 
 
 
@@ -166,12 +166,25 @@ unsigned char reverseBits(unsigned char num) {
     return reversedNum;
 }
 
+unsigned char countBits(unsigned char bits)
+{
+   unsigned char number = 0;
+   unsigned char i;
+
+   for(i = 0; i < 7; i++)
+   {
+      number += (bits & (0x01 << i)) >> i;
+   }
+
+   return number;
+}
+
 //-----------------------------------------------------------------------------
 // MAIN ROUTINE
 //-----------------------------------------------------------------------------
 void main (void)
 {
-  bit lastDirection;
+  bit lastDirection = RECOVER_RIGHT;
 
   bit Flag_aff_txt0 = 1;
   bit Flag_aff_txt1 = 1;
@@ -236,8 +249,6 @@ void main (void)
    PCA9685_InitServoMotor(1, PCA9685_ADDRESS,1); // Initialisation du PCA pour Servo Digital 330Hz 
 
    //Positionne les servos dans une certaine position
-   Cmd_Servo(1, OUVERTE); 
-   Cmd_Servo(2, OUVERTE);
 
 // Extinction des leds
    Led_verte=0;
@@ -245,6 +256,9 @@ void main (void)
    Led_rouge=0;
  
    Putc_uart (XON,CARTE_MOTEUR);	
+
+   ligne = Lire_Ligne(CAPT_LIGNE_ADDRESS);
+   Delai_ms(50);
 
 
    setLineFollowerFlag(0);
@@ -321,9 +335,17 @@ void main (void)
 
          if(!Bp2)
          {
-            setLineFollowerFlag(1);
+            Send_string("ST\r", CARTE_MOTEUR);
+            Delai_ms(10);
+            Send_string("DI0\r", CARTE_MOTEUR);
+            Delai_ms(10);
+            
+            
+            Send_string("PW700\r", CARTE_MOTEUR);
+            
+            Delai_ms(10);
 
-            Led_jaune = getLineFollowerFlag();
+            setLineFollowerFlag(1);
 
             continue;
          }
@@ -350,14 +372,18 @@ void main (void)
       {
          ligne = Lire_Ligne(CAPT_LIGNE_ADDRESS);
 
+
          lineLeft = (ligne & 0xF0) >> 4;
          lineRight = reverseBits((ligne & 0x0F));
 
-         if((ligne & 0x3C) == 0x3C || (ligne & 0x38) == 0x38 || (ligne & 0x1C) == 0x1C)
+        // if((ligne & 0x3C) == 0x3C || (ligne & 0x38) == 0x38 || (ligne & 0x1C) == 0x1C)
+        if(countBits(ligne & 0x7E) >= 3)
          {
             Send_string("RE2\r", CARTE_MOTEUR);
+            Delai_ms(2);
             while(Roule);
             Send_string("AV20\r", CARTE_MOTEUR);
+            Delai_ms(2);
             while(Roule);
 
             setLineFollowerFlag(0);
@@ -367,7 +393,7 @@ void main (void)
          }
 
       
-
+         
          if(lastDirection == RECOVER_LEFT)
          {
             coeffBit2 = (lineRight & 0x04) >> 2;
@@ -379,23 +405,39 @@ void main (void)
                Led_verte = 1;
                Led_rouge = 0;
 
+
                strcpy(commandBuffer, "PD");
-               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue droite au maximum
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 95)*10, 10)); // roue droite au maximum
                strcat(commandBuffer, "\r");
                
                Send_string(commandBuffer, CARTE_MOTEUR);
 
                memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
-               strcpy(commandBuffer, "PG");
-               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
-               strcat(commandBuffer, "\r");
+               if((baseSpeed - COEFF_RECOVERY) < 0)
+               {
+                  Send_string("WDBS0\r", CARTE_MOTEUR); // we invert the left wheel
+
+                  strcpy(commandBuffer, "PG");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*-10, 10)); // roue gauche inversée
+                  strcat(commandBuffer, "\r");
+               }
+               else
+               {
+                  Send_string("DI0\r", CARTE_MOTEUR);
+
+                  strcpy(commandBuffer, "PG");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
+                  strcat(commandBuffer, "\r");
+               }
+
+               
                
                Send_string(commandBuffer, CARTE_MOTEUR);
 
                memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
-               // lastDirection = RECOVER_RIGHT;
+               //lastDirection = RECOVER_RIGHT;
 
                continue;
             }
@@ -412,34 +454,50 @@ void main (void)
                Led_verte = 0;
                Led_rouge = 1;
 
+
                strcpy(commandBuffer, "PG");
-               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue droite au maximum
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 95)*10, 10)); // roue droite au maximum
                strcat(commandBuffer, "\r");
                
                Send_string(commandBuffer, CARTE_MOTEUR);
 
                memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
-               strcpy(commandBuffer, "PD");
-               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
-               strcat(commandBuffer, "\r");
-               
+               if((baseSpeed - COEFF_RECOVERY) < 0)
+               {
+                  Send_string("WDBS1\r", CARTE_MOTEUR); // we invert the right wheel
+                  
+                  strcpy(commandBuffer, "PD");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*-10, 10)); // roue gauche ralentie
+                  strcat(commandBuffer, "\r");
+               }
+               else
+               {
+                  Send_string("DI0\r", CARTE_MOTEUR);
+
+                  strcpy(commandBuffer, "PD");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
+                  strcat(commandBuffer, "\r");
+               }
+
                Send_string(commandBuffer, CARTE_MOTEUR);
 
                memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
-               // lastDirection = RECOVER_LEFT;
+               
+
+               //lastDirection = RECOVER_LEFT;
 
                continue;
             }
          }
 
 
-         /*if((ligne & 0x3C) == 0x3C)
-         {
-            // arrived at the end
-            setLineFollowerFlag(0);
-         }*/
+         //if((ligne & 0x3C) == 0x3C)
+         //{
+         //   // arrived at the end
+         //   setLineFollowerFlag(0);
+         // }
 
          if(lineLeft > lineRight) // select only the most used line
          {
@@ -451,19 +509,33 @@ void main (void)
             coeffBit2 = (lineLeft & 0x04) >> 2;
             coeffBit3 = (lineLeft & 0x08) >> 3;
 
-            angleCorrection = (coeffBit0 * COEFF_0) + (coeffBit1 * COEFF_1) + (coeffBit2 * COEFF_2) + (coeffBit3 * COEFF_3);
+            angleCorrection = ((coeffBit0 * COEFF_0) + (coeffBit1 * COEFF_1) + (coeffBit2 * COEFF_2) + (coeffBit3 * COEFF_3)) / countBits(ligne);
 
 
-            strcpy(commandBuffer, "PG");
-            strcat(commandBuffer, itoa(min(baseSpeed + angleCorrection, 92)*10, 10)); // roue gauche au maximum
-            strcat(commandBuffer, "\r");
-            
+            if((baseSpeed - angleCorrection) < 0)
+            {
+               Send_string("WDBS1\r", CARTE_MOTEUR); // we invert the right wheel
+
+               strcpy(commandBuffer, "PD");
+               strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*-10, 10)); // roue droite ralentie
+               strcat(commandBuffer, "\r");
+            }
+            else
+            {
+               Send_string("DI0\r", CARTE_MOTEUR);
+
+               strcpy(commandBuffer, "PD");
+               strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*10, 10)); // roue droite ralentie
+               strcat(commandBuffer, "\r");
+            }
+
             Send_string(commandBuffer, CARTE_MOTEUR);
 
             memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+            
 
-            strcpy(commandBuffer, "PD");
-            strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*10, 10)); // roue droite ralentie
+            strcpy(commandBuffer, "PG");
+            strcat(commandBuffer, itoa(min(baseSpeed + angleCorrection, 95)*10, 10)); // roue gauche au maximum
             strcat(commandBuffer, "\r");
             
             Send_string(commandBuffer, CARTE_MOTEUR);
@@ -483,23 +555,41 @@ void main (void)
             coeffBit2 = (lineRight & 0x04) >> 2;
             coeffBit3 = (lineRight & 0x08) >> 3;
 
-            angleCorrection = (coeffBit0 * COEFF_0) + (coeffBit1 * COEFF_1) + (coeffBit2 * COEFF_2) + (coeffBit3 * COEFF_3);
+            angleCorrection = ((coeffBit0 * COEFF_0) + (coeffBit1 * COEFF_1) + (coeffBit2 * COEFF_2) + (coeffBit3 * COEFF_3)) / countBits(ligne);
+
+            
+
+            if((baseSpeed - angleCorrection) < 0)
+            {
+               Send_string("WDBS0\r", CARTE_MOTEUR); // we invert the left wheel
+
+               strcpy(commandBuffer, "PG");
+               strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*-10, 10)); // roue gauche ralentie
+               strcat(commandBuffer, "\r");
+            }
+            else
+            {
+               Send_string("DI0\r", CARTE_MOTEUR);
+
+               strcpy(commandBuffer, "PG");
+               strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*10, 10)); // roue gauche ralentie
+               strcat(commandBuffer, "\r");
+            }
+            
+            
+            Send_string(commandBuffer, CARTE_MOTEUR);
+
+            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
 
             strcpy(commandBuffer, "PD");
-            strcat(commandBuffer, itoa(min(baseSpeed + angleCorrection, 92)*10, 10)); // roue droite au maximum
+            strcat(commandBuffer, itoa(min(baseSpeed + angleCorrection, 95)*10, 10)); // roue droite au maximum
             strcat(commandBuffer, "\r");
             
             Send_string(commandBuffer, CARTE_MOTEUR);
 
             memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
-            strcpy(commandBuffer, "PG");
-            strcat(commandBuffer, itoa((baseSpeed - angleCorrection)*10, 10)); // roue gauche ralentie
-            strcat(commandBuffer, "\r");
-            
-            Send_string(commandBuffer, CARTE_MOTEUR);
-
-            memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
             lastDirection = RECOVER_RIGHT;
          }
@@ -510,48 +600,82 @@ void main (void)
                Led_verte = 0;
                Led_rouge = 1;
 
+               Send_string("DI0\r", CARTE_MOTEUR);
+
+               if((baseSpeed - COEFF_RECOVERY) < 0)
+               {
+                  Send_string("WDBS1\r", CARTE_MOTEUR); // we invert the right wheel
+                  
+                  strcpy(commandBuffer, "PD");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*-10, 10)); // roue gauche ralentie
+                  strcat(commandBuffer, "\r");
+               }
+               else
+               {
+
+                  strcpy(commandBuffer, "PD");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
+                  strcat(commandBuffer, "\r");
+               }
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+
                strcpy(commandBuffer, "PG");
-               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue gauche au maximum
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 95)*10, 10)); // roue gauche au maximum
                strcat(commandBuffer, "\r");
                
                Send_string(commandBuffer, CARTE_MOTEUR);
 
                memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
-
-               strcpy(commandBuffer, "PD");
-               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue droite ralentie
-               strcat(commandBuffer, "\r");
                
-               Send_string(commandBuffer, CARTE_MOTEUR);
-
-               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
             }
             else
             {
                Led_verte = 1;
                Led_rouge = 0;
 
+               Send_string("DI0\r", CARTE_MOTEUR);
+
+               if((baseSpeed - COEFF_RECOVERY) < 0)
+               {
+                  Send_string("WDBS0\r", CARTE_MOTEUR); // we invert the left wheel
+
+                  strcpy(commandBuffer, "PG");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*-10, 10)); // roue gauche inversée
+                  strcat(commandBuffer, "\r");
+               }
+               else
+               {
+
+                  strcpy(commandBuffer, "PG");
+                  strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
+                  strcat(commandBuffer, "\r");
+               }
+               
+               Send_string(commandBuffer, CARTE_MOTEUR);
+
+               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
+
+
                strcpy(commandBuffer, "PD");
-               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 92)*10, 10)); // roue droite au maximum
+               strcat(commandBuffer, itoa(min(baseSpeed + COEFF_RECOVERY, 95)*10, 10)); // roue droite au maximum
                strcat(commandBuffer, "\r");
                
                Send_string(commandBuffer, CARTE_MOTEUR);
 
                memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
 
-               strcpy(commandBuffer, "PG");
-               strcat(commandBuffer, itoa((baseSpeed - COEFF_RECOVERY)*10, 10)); // roue gauche ralentie
-               strcat(commandBuffer, "\r");
-               
-               Send_string(commandBuffer, CARTE_MOTEUR);
-
-               memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
             }
          }
          else if(lineLeft == lineRight)
          {
             Led_verte = 1;
             Led_rouge = 1;
+
+            Send_string("DI0\r", CARTE_MOTEUR);
 
             strcpy(commandBuffer, "PD");
             strcat(commandBuffer, itoa(baseSpeed*10, 10)); // roue droite au maximum
@@ -569,8 +693,10 @@ void main (void)
 
             memset(commandBuffer, 0, sizeof(commandBuffer)); // On vide la commande
          }
+
+
   
-         Delai_ms(1);
+         Delai_ms(5);
       }
 
 	}// Attente retrait de la tirette 

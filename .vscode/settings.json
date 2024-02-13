@@ -1,5 +1,6 @@
 {
    "files.associations": {
       "INT.C": "cpp"
-   }
+   },
+   "editor.fontSize": 14
 }
